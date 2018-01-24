@@ -58,7 +58,7 @@ MODULE_AUTHOR("Urs Thuermann <urs.thuermann@volkswagen.de>");
 /*
  * CAN test feature:
  * Enable the echo on driver level for testing the CAN core echo modes.
- * See Documentation/networking/can.txt for details.
+ * See Documentation/networking/can.rst for details.
  */
 
 static bool echo; /* echo testing. Default: 0 (Off) */
