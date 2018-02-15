@@ -2565,6 +2565,8 @@ int regmap_bulk_read(struct regmap *map, unsigned int reg, void *val,
 
 	if (!IS_ALIGNED(reg, map->reg_stride))
 		return -EINVAL;
+	if (val_count == 0)
+		return -EINVAL;
 
 	if (map->bus && map->format.parse_inplace && (vol || map->cache_type == REGCACHE_NONE)) {
 		ret = regmap_raw_read(map, reg, val, val_bytes * val_count);
@@ -2581,13 +2583,15 @@ int regmap_bulk_read(struct regmap *map, unsigned int reg, void *val,
 		u16 *u16 = val;
 		u8 *u8 = val;
 
+		map->lock(map->lock_arg);
+
 		for (i = 0; i < val_count; i++) {
 			unsigned int ival;
 
-			ret = regmap_read(map, reg + regmap_get_offset(map, i),
-					  &ival);
+			ret = _regmap_read(map, reg + regmap_get_offset(map, i),
+					   &ival);
 			if (ret != 0)
-				return ret;
+				goto out;
 
 			switch (map->format.val_bytes) {
 #ifdef CONFIG_64BIT
@@ -2605,12 +2609,16 @@ int regmap_bulk_read(struct regmap *map, unsigned int reg, void *val,
 				u8[i] = ival;
 				break;
 			default:
-				return -EINVAL;
+				ret = -EINVAL;
+				goto out;
 			}
 		}
+
+out:
+		map->unlock(map->lock_arg);
 	}
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(regmap_bulk_read);
 
