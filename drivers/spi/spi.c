@@ -1271,10 +1271,32 @@ static void spi_pump_messages(struct kthread_work *work)
 	__spi_pump_messages(master, true);
 }
 
-static int spi_init_queue(struct spi_master *master)
+/**
+ * spi_set_thread_rt - set the controller to pump at realtime priority
+ * @master: controller to boost priority of
+ *
+ * This can be called because the controller requested realtime priority
+ * (by setting the ->rt value before calling spi_register_controller()) or
+ * because a device on the bus said that its transfers needed realtime
+ * priority.
+ *
+ * NOTE: at the moment if any device on a bus says it needs realtime then
+ * the thread will be at realtime priority for all transfers on that
+ * controller.  If this eventually becomes a problem we may see if we can
+ * find a way to boost the priority only temporarily during relevant
+ * transfers.
+ */
+static void spi_set_thread_rt(struct spi_master *master)
 {
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
 
+	dev_info(&master->dev,
+		"will run message pump with realtime priority\n");
+	sched_setscheduler(master->kworker_task, SCHED_FIFO, &param);
+}
+
+static int spi_init_queue(struct spi_master *master)
+{
 	master->running = false;
 	master->busy = false;
 
@@ -1295,11 +1317,8 @@ static int spi_init_queue(struct spi_master *master)
 	 * request and the scheduling of the message pump thread. Without this
 	 * setting the message pump thread will remain at default priority.
 	 */
-	if (master->rt) {
-		dev_info(&master->dev,
-			"will run message pump with realtime priority\n");
-		sched_setscheduler(master->kworker_task, SCHED_FIFO, &param);
-	}
+	if (master->rt)
+		spi_set_thread_rt(master);
 
 	return 0;
 }
@@ -2600,6 +2619,11 @@ int spi_setup(struct spi_device *spi)
 		status = spi->master->setup(spi);
 
 	spi_set_cs(spi, false);
+
+	if (spi->rt && !spi->master->rt) {
+		spi->master->rt = true;
+		spi_set_thread_rt(spi->master);
+	}
 
 	dev_dbg(&spi->dev, "setup mode %d, %s%s%s%s%u bits/w, %u Hz max --> %d\n",
 			(int) (spi->mode & (SPI_CPOL | SPI_CPHA)),
