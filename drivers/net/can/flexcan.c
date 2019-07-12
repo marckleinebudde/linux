@@ -791,15 +791,22 @@ static inline struct flexcan_priv *rx_offload_to_priv(struct can_rx_offload *off
 	return container_of(offload, struct flexcan_priv, offload);
 }
 
-static unsigned int flexcan_mailbox_read(struct can_rx_offload *offload,
-					 struct can_frame *cf,
-					 u32 *timestamp, unsigned int n)
+static struct sk_buff *flexcan_mailbox_read(struct can_rx_offload *offload,
+					    unsigned int n, u32 *timestamp,
+					    bool drop)
 {
 	struct flexcan_priv *priv = rx_offload_to_priv(offload);
 	struct flexcan_regs __iomem *regs = priv->regs;
 	struct flexcan_mb __iomem *mb;
+	struct sk_buff *skb;
+	struct can_frame *cf;
 	u32 reg_ctrl, reg_id, reg_iflag1;
 	int i;
+
+	if (unlikely(drop)) {
+		skb = ERR_PTR(-ENOBUFS);
+		goto mark_as_read;
+	}
 
 	mb = flexcan_get_mb(priv, n);
 
@@ -814,7 +821,7 @@ static unsigned int flexcan_mailbox_read(struct can_rx_offload *offload,
 		code = reg_ctrl & FLEXCAN_MB_CODE_MASK;
 		if ((code != FLEXCAN_MB_CODE_RX_FULL) &&
 		    (code != FLEXCAN_MB_CODE_RX_OVERRUN))
-			return 0;
+			return NULL;
 
 		if (code == FLEXCAN_MB_CODE_RX_OVERRUN) {
 			/* This MB was overrun, we lost data */
@@ -824,9 +831,15 @@ static unsigned int flexcan_mailbox_read(struct can_rx_offload *offload,
 	} else {
 		reg_iflag1 = priv->read(&regs->iflag1);
 		if (!(reg_iflag1 & FLEXCAN_IFLAG_RX_FIFO_AVAILABLE))
-			return 0;
+			return NULL;
 
 		reg_ctrl = priv->read(&mb->can_ctrl);
+	}
+
+	skb = alloc_can_skb(offload->dev, &cf);
+	if (!skb) {
+		skb = ERR_PTR(-ENOMEM);
+		goto mark_as_read;
 	}
 
 	/* increase timstamp to full 32 bit */
@@ -847,7 +860,7 @@ static unsigned int flexcan_mailbox_read(struct can_rx_offload *offload,
 		*(__be32 *)(cf->data + i) = data;
 	}
 
-	/* mark as read */
+ mark_as_read:
 	if (priv->devtype_data->quirks & FLEXCAN_QUIRK_USE_OFF_TIMESTAMP) {
 		/* Clear IRQ */
 		if (n < 32)
@@ -864,7 +877,7 @@ static unsigned int flexcan_mailbox_read(struct can_rx_offload *offload,
 	 */
 	priv->read(&regs->timer);
 
-	return 1;
+	return skb;
 }
 
 
