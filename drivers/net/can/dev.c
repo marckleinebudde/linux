@@ -1277,7 +1277,7 @@ static __init int can_dev_init(void)
 
 	err = rtnl_link_register(&can_link_ops);
 	if (!err)
-		printk(KERN_INFO MOD_DESC "\n");
+		pr_info(MOD_DESC "\n");
 
 	return err;
 }
