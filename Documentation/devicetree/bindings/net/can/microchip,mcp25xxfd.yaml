@@ -25,6 +25,14 @@ properties:
   interrupts-extended:
     maxItems: 1
 
+  #clock-cells:
+    maxItems: 1
+    const: 0
+
+  clock-output-names:
+    description: clock output name, of the form can?_oscout.
+    maxItems: 1
+
   clocks:
     maxItems: 1
 
@@ -47,11 +55,20 @@ properties:
       Must be half or less of "clocks" frequency.
     maximum: 20000000
 
+  mcp25xxfd,clkout-divisor:
+    oneOf:
+      - const: 1
+      - const: 2
+      - const: 4
+      - const: 10
+
 required:
   - compatible
   - reg
   - interrupts-extended
   - clocks
+  - #clock-cells
+  - clock-output-names
 
 examples:
   - |
@@ -65,6 +82,8 @@ examples:
         can@0 {
             compatible = "microchip,mcp25xxfd";
             reg = <0>;
+            #clock-cells = <0>;
+            clock-output-names = "can0_oscout";
             clocks = <&can0_osc>;
             pinctrl-names = "default";
             pinctrl-0 = <&can0_pins>;
@@ -73,5 +92,6 @@ examples:
             rx-int-gpios = <&gpio 27 GPIO_ACTIVE_LOW>;
             vdd-supply = <&reg5v0>;
             xceiver-supply = <&reg5v0>;
+            mcp25xxfd,clkout-divisor = <1>;
         };
     };
