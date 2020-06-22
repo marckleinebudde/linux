@@ -18,6 +18,7 @@
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 #include <linux/spi/spi.h>
+#include <linux/clk-provider.h>
 
 /* MPC25xx registers */
 
@@ -594,6 +595,11 @@ struct mcp25xxfd_priv {
 
 	struct mcp25xxfd_devtype_data devtype_data;
 	struct can_berr_counter bec;
+
+	u32 clkodiv;
+
+	/* oscout clock */
+	struct clk_hw oscout;
 };
 
 #define MCP25XXFD_IS(_model) \

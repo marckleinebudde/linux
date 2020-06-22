@@ -471,19 +471,26 @@ __mcp25xxfd_chip_set_mode(const struct mcp25xxfd_priv *priv,
 {
 	u32 con, con_reqop;
 	int err;
+	u8 new_mode = mode_req;
+	/* if the clock is in use (prepared) we can't go to
+	 * SLEEP mode. Go to CONFIG mode instead.
+	 */
+	if (priv->oscout.core && clk_hw_is_prepared(&priv->oscout) &&
+	    mode_req == MCP25XXFD_REG_CON_MODE_SLEEP)
+		new_mode = MCP25XXFD_REG_CON_MODE_CONFIG;
 
-	con_reqop = FIELD_PREP(MCP25XXFD_REG_CON_REQOP_MASK, mode_req);
+	con_reqop = FIELD_PREP(MCP25XXFD_REG_CON_REQOP_MASK, new_mode);
 	err = regmap_update_bits(priv->map_reg, MCP25XXFD_REG_CON,
 				 MCP25XXFD_REG_CON_REQOP_MASK, con_reqop);
 	if (err)
 		return err;
 
-	if (mode_req == MCP25XXFD_REG_CON_MODE_SLEEP || nowait)
+	if (new_mode == MCP25XXFD_REG_CON_MODE_SLEEP || nowait)
 		return 0;
 
 	err = regmap_read_poll_timeout(priv->map_reg, MCP25XXFD_REG_CON, con,
 				       FIELD_GET(MCP25XXFD_REG_CON_OPMOD_MASK,
-						 con) == mode_req,
+						 con) == new_mode,
 				       MCP25XXFD_POLL_SLEEP_US,
 				       MCP25XXFD_POLL_TIMEOUT_US);
 	if (err) {
@@ -491,7 +498,7 @@ __mcp25xxfd_chip_set_mode(const struct mcp25xxfd_priv *priv,
 
 		netdev_err(priv->ndev,
 			   "Controller failed to enter mode %s Mode (%u) and stays in %s Mode (%u).\n",
-			   mcp25xxfd_get_mode_str(mode_req), mode_req,
+			   mcp25xxfd_get_mode_str(mode_req), new_mode,
 			   mcp25xxfd_get_mode_str(mode), mode);
 		return err;
 	}
@@ -660,7 +667,7 @@ static int mcp25xxfd_chip_clock_init(const struct mcp25xxfd_priv *priv)
 	 */
 	osc = MCP25XXFD_REG_OSC_LPMEN |
 		FIELD_PREP(MCP25XXFD_REG_OSC_CLKODIV_MASK,
-			   MCP25XXFD_REG_OSC_CLKODIV_10);
+			   priv->clkodiv);
 	err = regmap_write(priv->map_reg, MCP25XXFD_REG_OSC, osc);
 	if (err)
 		return err;
@@ -2447,6 +2454,128 @@ mcp25xxfd_register_quirks(struct mcp25xxfd_priv *priv)
 		priv->devtype_data.quirks |= MCP25XXFD_QUIRK_HALF_DUPLEX;
 }
 
+static int mcp25xxfd_oscout_prepare(struct clk_hw *hw)
+{
+	struct mcp25xxfd_priv *priv =
+		container_of(hw, struct mcp25xxfd_priv, oscout);
+	struct net_device *ndev = priv->ndev;
+	u32 osc, osc_reference, osc_mask;
+	int err;
+	u8 mode;
+
+	/* increase the usage count, and disallow suspend */
+	pm_runtime_get_sync(ndev->dev.parent);
+
+	/* Read MCP25XXFD_REG_OSC as the first thing if we are
+	 * possibly in sleep mode. If we read anything else first,
+	 * we run the risk of not hitting the workaround in
+	 * mcp25xxfd-regmap.c
+	 */
+	err = regmap_read(priv->map_reg, MCP25XXFD_REG_OSC, &osc);
+	if (err)
+		return err;
+
+	if (osc & MCP25XXFD_REG_OSC_OSCDIS) {
+		osc = FIELD_PREP(MCP25XXFD_REG_OSC_CLKODIV_MASK, MCP25XXFD_REG_OSC_CLKODIV_10);
+		err = regmap_write(priv->map_reg, MCP25XXFD_REG_OSC, osc);
+		if (err)
+			return err;
+	}
+
+	osc_reference = MCP25XXFD_REG_OSC_OSCRDY;
+	osc_mask = MCP25XXFD_REG_OSC_OSCRDY | MCP25XXFD_REG_OSC_PLLRDY;
+
+	/* Wait for "Oscillator Ready" bit */
+	err = regmap_read_poll_timeout(priv->map_reg, MCP25XXFD_REG_OSC, osc,
+					(osc & osc_mask) == osc_reference,
+					10000, 1000000);
+	if (err)
+		return err;
+
+	err = regmap_update_bits(priv->map_reg, MCP25XXFD_REG_OSC,
+			MCP25XXFD_REG_OSC_CLKODIV_MASK, priv->clkodiv);
+	if (err)
+		return err;
+
+	err = mcp25xxfd_chip_set_mode(priv, MCP25XXFD_REG_CON_MODE_CONFIG);
+	if (err)
+		return err;
+
+	return 0;
+}
+
+static void mcp25xxfd_oscout_unprepare(struct clk_hw *hw)
+{
+	struct mcp25xxfd_priv *priv =
+		container_of(hw, struct mcp25xxfd_priv, oscout);
+	struct net_device *ndev = priv->ndev;
+	u8 mode = 0;
+
+	/* if we have no more clock users, and the CAN is not active,
+	 * set the mode to SLEEP.
+	 */
+	mcp25xxfd_chip_get_mode(priv, &mode);
+	if (mode == MCP25XXFD_REG_CON_MODE_CONFIG) {
+		mcp25xxfd_chip_set_mode(priv, MCP25XXFD_REG_CON_MODE_SLEEP);
+	}
+
+	/* decrease the usage count, and allow suspend */
+	pm_runtime_put(ndev->dev.parent);
+}
+
+static unsigned long mcp25xxfd_oscout_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
+{
+	struct mcp25xxfd_priv *priv =
+		container_of(hw, struct mcp25xxfd_priv, oscout);
+
+	switch (priv->clkodiv) {
+	case MCP25XXFD_REG_OSC_CLKODIV_1:
+		return parent_rate;
+	case MCP25XXFD_REG_OSC_CLKODIV_2:
+		return parent_rate / 2;
+	case MCP25XXFD_REG_OSC_CLKODIV_4:
+		return parent_rate / 4;
+	case MCP25XXFD_REG_OSC_CLKODIV_10:
+		return parent_rate / 10;
+	}
+
+	return 0;
+}
+
+static const struct clk_ops mcp25xxfd_clk_ops = {
+	.prepare = mcp25xxfd_oscout_prepare,
+	.unprepare = mcp25xxfd_oscout_unprepare,
+	.recalc_rate = mcp25xxfd_oscout_recalc_rate,
+};
+
+static int mcp25xxfd_oscout_register_clk(struct mcp25xxfd_priv *priv)
+{
+	struct clk_init_data init = {
+		.ops = &mcp25xxfd_clk_ops,
+		.flags = CLK_GET_RATE_NOCACHE,
+	};
+	struct device *dev = &priv->spi->dev;
+	const char *parent_name;
+	int ret;
+
+	parent_name = __clk_get_name(priv->clk);
+	init.parent_names = &parent_name;
+	init.num_parents = 1;
+
+	ret = device_property_read_string(dev, "clock-output-names",
+					  &init.name);
+	if (ret)
+		return ret;
+
+	priv->oscout.init = &init;
+
+	ret = devm_clk_hw_register(dev, &priv->oscout);
+	if (ret)
+		return ret;
+
+	return devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get, &priv->oscout);
+}
+
 static int mcp25xxfd_register_chip_detect(struct mcp25xxfd_priv *priv)
 {
 	const struct net_device *ndev = priv->ndev;
@@ -2630,6 +2759,11 @@ static int mcp25xxfd_register(struct mcp25xxfd_priv *priv)
 	if (err)
 		goto out_chip_set_mode_sleep;
 
+	/* Register the output clock */
+	err = mcp25xxfd_oscout_register_clk(priv);
+	if (err)
+		goto out_unregister_candev;
+
 	err = mcp25xxfd_register_done(priv);
 	if (err)
 		goto out_unregister_candev;
@@ -2711,7 +2845,7 @@ static int mcp25xxfd_probe(struct spi_device *spi)
 	struct gpio_desc *rx_int;
 	struct regulator *reg_vdd, *reg_xceiver;
 	struct clk *clk;
-	u32 freq;
+	u32 freq, clkodiv;
 	int err;
 
 	rx_int = devm_gpiod_get_optional(&spi->dev, "rx-int", GPIOD_IN);
@@ -2735,6 +2869,31 @@ static int mcp25xxfd_probe(struct spi_device *spi)
 		reg_xceiver = NULL;
 	else if (IS_ERR(reg_xceiver))
 		return PTR_ERR(reg_xceiver);
+
+	err = device_property_read_u32(&spi->dev, "mcp25xxfd,clkout-divisor", &clkodiv);
+	if (!err) {
+		switch (clkodiv) {
+			case 1:
+				clkodiv = MCP25XXFD_REG_OSC_CLKODIV_1;
+				break;
+			case 2:
+				clkodiv = MCP25XXFD_REG_OSC_CLKODIV_2;
+				break;
+			case 4:
+				clkodiv = MCP25XXFD_REG_OSC_CLKODIV_4;
+				break;
+			case 10:
+				clkodiv = MCP25XXFD_REG_OSC_CLKODIV_10;
+				break;
+			default:
+				dev_err(&spi->dev,
+					 "Invalid clkout-divisor specified. 1, 2, 4, and 10 are available.\n");
+				return -ERANGE;
+		}
+	} else if (err == -ENODATA)
+		clkodiv = MCP25XXFD_REG_OSC_CLKODIV_10;
+	else
+		return err;
 
 	clk = devm_clk_get(&spi->dev, NULL);
 	if (IS_ERR(clk)) {
@@ -2785,6 +2944,7 @@ static int mcp25xxfd_probe(struct spi_device *spi)
 	priv->clk = clk;
 	priv->reg_vdd = reg_vdd;
 	priv->reg_xceiver = reg_xceiver;
+	priv->clkodiv = clkodiv;
 
 	match = device_get_match_data(&spi->dev);
 	if (match)
