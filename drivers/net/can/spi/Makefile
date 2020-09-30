@@ -4,4 +4,4 @@
 
 
 obj-$(CONFIG_CAN_MCP251X)	+= mcp251x.o
-obj-y				+= mcp25xxfd/
+obj-y				+= mcp251xfd/
