@@ -1793,6 +1793,12 @@ static int mcp251xfd_register(struct mcp251xfd_priv *priv)
 	if (err)
 		goto out_chip_sleep;
 
+	err = mcp251xfd_chip_clock_init(priv);
+	if (err == -ENODEV)
+		goto out_runtime_disable;
+	if (err)
+		goto out_chip_sleep;
+
 	err = mcp251xfd_register_chip_detect(priv);
 	if (err)
 		goto out_chip_sleep;
