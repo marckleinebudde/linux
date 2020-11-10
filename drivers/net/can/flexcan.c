@@ -521,7 +521,7 @@ static netdev_tx_t flexcan_start_xmit(struct sk_buff *skb, struct net_device *de
 	struct can_frame *cf = (struct can_frame *)skb->data;
 	u32 can_id;
 	u32 data;
-	u32 ctrl = FLEXCAN_MB_CODE_TX_DATA | (cf->can_dlc << 16);
+	u32 ctrl = FLEXCAN_MB_CODE_TX_DATA | (cf->len << 16);
 
 	if (can_dropped_invalid_skb(dev, skb))
 		return NETDEV_TX_OK;
@@ -736,7 +736,7 @@ static struct sk_buff *flexcan_mailbox_read(struct can_rx_offload *offload,
 
 	if (reg_ctrl & FLEXCAN_MB_CNT_RTR)
 		cf->can_id |= CAN_RTR_FLAG;
-	cf->can_dlc = can_cc_dlc2len((reg_ctrl >> 16) & 0xf);
+	cf->len = can_cc_dlc2len((reg_ctrl >> 16) & 0xf);
 
 	*(__be32 *)(cf->data + 0) = cpu_to_be32(priv->read(&mb->data[0]));
 	*(__be32 *)(cf->data + 4) = cpu_to_be32(priv->read(&mb->data[1]));
