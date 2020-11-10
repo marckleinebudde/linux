@@ -1221,7 +1221,7 @@ static void kvaser_usb_rx_can_msg(const struct kvaser_usb *dev,
 		else
 			cf->can_id &= CAN_SFF_MASK;
 
-		cf->can_dlc = get_can_dlc(msg->u.leaf.log_message.dlc);
+		cf->can_dlc = can_cc_dlc2len(msg->u.leaf.log_message.dlc);
 
 		if (msg->u.leaf.log_message.flags & MSG_FLAG_REMOTE_FRAME)
 			cf->can_id |= CAN_RTR_FLAG;
@@ -1239,7 +1239,7 @@ static void kvaser_usb_rx_can_msg(const struct kvaser_usb *dev,
 			cf->can_id |= CAN_EFF_FLAG;
 		}
 
-		cf->can_dlc = get_can_dlc(rx_msg[5]);
+		cf->can_dlc = can_cc_dlc2len(rx_msg[5]);
 
 		if (msg->u.rx_can_header.flag & MSG_FLAG_REMOTE_FRAME)
 			cf->can_id |= CAN_RTR_FLAG;
