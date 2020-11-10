@@ -226,7 +226,7 @@ static inline int pucan_msg_get_channel(struct pucan_rx_msg *rm)
 }
 
 /* return the dlc value from any received message channel_dlc field */
-static inline int pucan_msg_get_dlc(struct pucan_rx_msg *rm)
+static inline u8 pucan_msg_get_dlc(struct pucan_rx_msg *rm)
 {
 	return rm->channel_dlc >> 4;
 }
