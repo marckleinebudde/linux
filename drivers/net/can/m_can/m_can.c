@@ -464,7 +464,7 @@ static void m_can_read_fifo(struct net_device *dev, u32 rxfs)
 	}
 
 	if (dlc & RX_BUF_FDF)
-		cf->len = can_dlc2len((dlc >> 16) & 0x0F);
+		cf->len = can_fd_dlc2len((dlc >> 16) & 0x0F);
 	else
 		cf->len = can_cc_dlc2len((dlc >> 16) & 0x0F);
 
@@ -1413,7 +1413,7 @@ static netdev_tx_t m_can_start_xmit(struct sk_buff *skb,
 		/* message ram configuration */
 		m_can_fifo_write(priv, 0, M_CAN_FIFO_ID, id);
 		m_can_fifo_write(priv, 0, M_CAN_FIFO_DLC,
-				 can_len2dlc(cf->len) << 16);
+				 can_fd_len2dlc(cf->len) << 16);
 
 		for (i = 0; i < cf->len; i += 4)
 			m_can_fifo_write(priv, 0,
@@ -1474,7 +1474,7 @@ static netdev_tx_t m_can_start_xmit(struct sk_buff *skb,
 		m_can_fifo_write(priv, putidx, M_CAN_FIFO_DLC,
 				 ((putidx << TX_BUF_MM_SHIFT) &
 				  TX_BUF_MM_MASK) |
-				 (can_len2dlc(cf->len) << 16) |
+				 (can_fd_len2dlc(cf->len) << 16) |
 				 fdflags | TX_BUF_EFC);
 
 		for (i = 0; i < cf->len; i += 4)
