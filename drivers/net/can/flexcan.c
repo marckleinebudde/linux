@@ -647,7 +647,7 @@ static void flexcan_read_fifo(const struct net_device *dev,
 
 	if (reg_ctrl & FLEXCAN_MB_CNT_RTR)
 		cf->can_id |= CAN_RTR_FLAG;
-	cf->can_dlc = get_can_dlc((reg_ctrl >> 16) & 0xf);
+	cf->len = can_cc_dlc2len((reg_ctrl >> 16) & 0xf);
 
 	*(__be32 *)(cf->data + 0) = cpu_to_be32(flexcan_read(&mb->data[0]));
 	*(__be32 *)(cf->data + 4) = cpu_to_be32(flexcan_read(&mb->data[1]));
