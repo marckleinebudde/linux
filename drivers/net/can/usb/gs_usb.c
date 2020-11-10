@@ -345,7 +345,7 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 
 		cf->can_id = le32_to_cpu(hf->can_id);
 
-		cf->can_dlc = get_can_dlc(hf->can_dlc);
+		cf->can_dlc = can_cc_dlc2len(hf->can_dlc);
 		memcpy(cf->data, hf->data, 8);
 
 		/* ERROR frames tell us information about the controller */
