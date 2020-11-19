@@ -258,11 +258,7 @@ static int gs_cmd_reset(struct gs_can *gsdev)
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_MODE,
 			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
-			     gsdev->channel,
-			     0,
-			     dm,
-			     sizeof(*dm),
-			     1000);
+			     gsdev->channel, 0, dm, sizeof(*dm), 1000);
 
 	kfree(dm);
 
@@ -395,14 +391,10 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 	}
 
  resubmit_urb:
-	usb_fill_bulk_urb(urb,
-			  usbcan->udev,
+	usb_fill_bulk_urb(urb, usbcan->udev,
 			  usb_rcvbulkpipe(usbcan->udev, GSUSB_ENDPOINT_IN),
-			  hf,
-			  sizeof(struct gs_host_frame),
-			  gs_usb_receive_bulk_callback,
-			  usbcan
-			  );
+			  hf, sizeof(struct gs_host_frame),
+			  gs_usb_receive_bulk_callback, usbcan);
 
 	rc = usb_submit_urb(urb, GFP_ATOMIC);
 	if (rc)
@@ -447,11 +439,7 @@ static int gs_usb_set_bittiming(struct net_device *netdev)
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_BITTIMING,
 			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
-			     dev->channel,
-			     0,
-			     dbt,
-			     sizeof(*dbt),
-			     1000);
+			     dev->channel, 0, dbt, sizeof(*dbt), 1000);
 
 	kfree(dbt);
 
@@ -471,10 +459,8 @@ static void gs_usb_xmit_callback(struct urb *urb)
 	if (urb->status)
 		netdev_info(netdev, "usb xmit fail %u\n", txc->echo_id);
 
-	usb_free_coherent(urb->dev,
-			  urb->transfer_buffer_length,
-			  urb->transfer_buffer,
-			  urb->transfer_dma);
+	usb_free_coherent(urb->dev, urb->transfer_buffer_length,
+			  urb->transfer_buffer, urb->transfer_dma);
 }
 
 static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
@@ -530,10 +516,8 @@ static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
 
 	usb_fill_bulk_urb(urb, dev->udev,
 			  usb_sndbulkpipe(dev->udev, GSUSB_ENDPOINT_OUT),
-			  hf,
-			  sizeof(*hf),
-			  gs_usb_xmit_callback,
-			  txc);
+			  hf, sizeof(*hf),
+			  gs_usb_xmit_callback, txc);
 
 	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 	usb_anchor_urb(urb, &dev->tx_submitted);
@@ -551,9 +535,7 @@ static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
 
 		usb_unanchor_urb(urb);
 		usb_free_coherent(dev->udev,
-				  sizeof(*hf),
-				  hf,
-				  urb->transfer_dma);
+				  sizeof(*hf), hf, urb->transfer_dma);
 
 		if (rc == -ENODEV) {
 			netif_device_detach(netdev);
@@ -573,10 +555,7 @@ static netdev_tx_t gs_can_start_xmit(struct sk_buff *skb,
 	return NETDEV_TX_OK;
 
  badidx:
-	usb_free_coherent(dev->udev,
-			  sizeof(*hf),
-			  hf,
-			  urb->transfer_dma);
+	usb_free_coherent(dev->udev, sizeof(*hf), hf, urb->transfer_dma);
  nomem_hf:
 	usb_free_urb(urb);
 
@@ -629,8 +608,7 @@ static int gs_can_open(struct net_device *netdev)
 							  GSUSB_ENDPOINT_IN),
 					  buf,
 					  sizeof(struct gs_host_frame),
-					  gs_usb_receive_bulk_callback,
-					  parent);
+					  gs_usb_receive_bulk_callback, parent);
 			urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
 			usb_anchor_urb(urb, &parent->rx_submitted);
@@ -685,13 +663,8 @@ static int gs_can_open(struct net_device *netdev)
 	rc = usb_control_msg(interface_to_usbdev(dev->iface),
 			     usb_sndctrlpipe(interface_to_usbdev(dev->iface), 0),
 			     GS_USB_BREQ_MODE,
-			     USB_DIR_OUT | USB_TYPE_VENDOR |
-			     USB_RECIP_INTERFACE,
-			     dev->channel,
-			     0,
-			     dm,
-			     sizeof(*dm),
-			     1000);
+			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
+			     dev->channel, 0, dm, sizeof(*dm), 1000);
 
 	if (rc < 0) {
 		netdev_err(netdev, "Couldn't start device (err=%d)\n", rc);
@@ -766,16 +739,10 @@ static int gs_usb_set_identify(struct net_device *netdev, bool do_identify)
 		imode->mode = cpu_to_le32(GS_CAN_IDENTIFY_OFF);
 
 	rc = usb_control_msg(interface_to_usbdev(dev->iface),
-			     usb_sndctrlpipe(interface_to_usbdev(dev->iface),
-					     0),
+			     usb_sndctrlpipe(interface_to_usbdev(dev->iface), 0),
 			     GS_USB_BREQ_IDENTIFY,
-			     USB_DIR_OUT | USB_TYPE_VENDOR |
-			     USB_RECIP_INTERFACE,
-			     dev->channel,
-			     0,
-			     imode,
-			     sizeof(*imode),
-			     100);
+			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
+			     dev->channel, 0, imode, sizeof(*imode), 100);
 
 	kfree(imode);
 
@@ -825,11 +792,7 @@ static struct gs_can *gs_make_candev(unsigned int channel,
 			     usb_rcvctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_BT_CONST,
 			     USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
-			     channel,
-			     0,
-			     bt_const,
-			     sizeof(*bt_const),
-			     1000);
+			     channel, 0, bt_const, sizeof(*bt_const), 1000);
 
 	if (rc < 0) {
 		dev_err(&intf->dev,
@@ -943,11 +906,8 @@ static int gs_usb_probe(struct usb_interface *intf,
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_HOST_FORMAT,
 			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
-			     1,
-			     intf->cur_altsetting->desc.bInterfaceNumber,
-			     hconf,
-			     sizeof(*hconf),
-			     1000);
+			     1, intf->cur_altsetting->desc.bInterfaceNumber,
+			     hconf, sizeof(*hconf), 1000);
 
 	kfree(hconf);
 
@@ -965,11 +925,8 @@ static int gs_usb_probe(struct usb_interface *intf,
 			     usb_rcvctrlpipe(interface_to_usbdev(intf), 0),
 			     GS_USB_BREQ_DEVICE_CONFIG,
 			     USB_DIR_IN | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
-			     1,
-			     intf->cur_altsetting->desc.bInterfaceNumber,
-			     dconf,
-			     sizeof(*dconf),
-			     1000);
+			     1, intf->cur_altsetting->desc.bInterfaceNumber,
+			     dconf, sizeof(*dconf), 1000);
 	if (rc < 0) {
 		dev_err(&intf->dev, "Couldn't get device config: (err=%d)\n",
 			rc);
