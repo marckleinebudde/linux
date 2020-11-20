@@ -1029,7 +1029,7 @@ static void rcar_canfd_error(struct net_device *ndev, u32 cerfl,
 	rcar_canfd_write(priv->base, RCANFD_CERFL(ch),
 			 RCANFD_CERFL_ERR(~cerfl));
 	stats->rx_packets++;
-	stats->rx_bytes += cf->can_dlc;
+	stats->rx_bytes += cf->len;
 	netif_rx(skb);
 }
 
@@ -1138,7 +1138,7 @@ static void rcar_canfd_state_change(struct net_device *ndev,
 
 		can_change_state(ndev, cf, tx_state, rx_state);
 		stats->rx_packets++;
-		stats->rx_bytes += cf->can_dlc;
+		stats->rx_bytes += cf->len;
 		netif_rx(skb);
 	}
 }
