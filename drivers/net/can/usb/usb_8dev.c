@@ -461,7 +461,7 @@ static void usb_8dev_rx_err_msg(struct usb_8dev_priv *priv,
 	priv->bec.rxerr = rxerr;
 
 	stats->rx_packets++;
-	stats->rx_bytes += cf->can_dlc;
+	stats->rx_bytes += cf->len;
 	netif_rx(skb);
 }
 
@@ -482,7 +482,7 @@ static void usb_8dev_rx_can_msg(struct usb_8dev_priv *priv,
 			return;
 
 		cf->can_id = be32_to_cpu(msg->id);
-		cf->can_dlc = can_cc_dlc2len(msg->dlc & 0xF);
+		cf->len = can_cc_dlc2len(msg->dlc & 0xF);
 
 		if (msg->flags & USB_8DEV_EXTID)
 			cf->can_id |= CAN_EFF_FLAG;
@@ -490,10 +490,10 @@ static void usb_8dev_rx_can_msg(struct usb_8dev_priv *priv,
 		if (msg->flags & USB_8DEV_RTR)
 			cf->can_id |= CAN_RTR_FLAG;
 		else
-			memcpy(cf->data, msg->data, cf->can_dlc);
+			memcpy(cf->data, msg->data, cf->len);
 
 		stats->rx_packets++;
-		stats->rx_bytes += cf->can_dlc;
+		stats->rx_bytes += cf->len;
 		netif_rx(skb);
 
 		can_led_event(priv->netdev, CAN_LED_EVENT_RX);
@@ -649,8 +649,8 @@ static netdev_tx_t usb_8dev_start_xmit(struct sk_buff *skb,
 		msg->flags |= USB_8DEV_EXTID;
 
 	msg->id = cpu_to_be32(cf->can_id & CAN_ERR_MASK);
-	msg->dlc = cf->can_dlc;
-	memcpy(msg->data, cf->data, cf->can_dlc);
+	msg->dlc = cf->len;
+	memcpy(msg->data, cf->data, cf->len);
 	msg->end = USB_8DEV_DATA_END;
 
 	for (i = 0; i < MAX_TX_URBS; i++) {
@@ -668,7 +668,7 @@ static netdev_tx_t usb_8dev_start_xmit(struct sk_buff *skb,
 
 	context->priv = priv;
 	context->echo_index = i;
-	context->dlc = cf->can_dlc;
+	context->dlc = cf->len;
 
 	usb_fill_bulk_urb(urb, priv->udev,
 			  usb_sndbulkpipe(priv->udev, USB_8DEV_ENDP_DATA_TX),
