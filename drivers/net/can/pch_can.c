@@ -574,7 +574,7 @@ static void pch_can_error(struct net_device *ndev, u32 status)
 	netif_receive_skb(skb);
 
 	stats->rx_packets++;
-	stats->rx_bytes += cf->can_dlc;
+	stats->rx_bytes += cf->len;
 }
 
 static irqreturn_t pch_can_interrupt(int irq, void *dev_id)
@@ -694,10 +694,10 @@ static int pch_can_rx_normal(struct net_device *ndev, u32 obj_num, int quota)
 		if (id2 & PCH_ID2_DIR)
 			cf->can_id |= CAN_RTR_FLAG;
 
-		cf->can_dlc = can_cc_dlc2len((ioread32(&priv->regs->
+		cf->len = can_cc_dlc2len((ioread32(&priv->regs->
 						    ifregs[0].mcont)) & 0xF);
 
-		for (i = 0; i < cf->can_dlc; i += 2) {
+		for (i = 0; i < cf->len; i += 2) {
 			data_reg = ioread16(&priv->regs->ifregs[0].data[i / 2]);
 			cf->data[i] = data_reg;
 			cf->data[i + 1] = data_reg >> 8;
@@ -706,7 +706,8 @@ static int pch_can_rx_normal(struct net_device *ndev, u32 obj_num, int quota)
 		rcv_pkts++;
 		stats->rx_packets++;
 		quota--;
-		stats->rx_bytes += cf->can_dlc;
+		stats->rx_bytes += cf->len;
+
 		netif_receive_skb(skb);
 
 		pch_fifo_thresh(priv, obj_num);
@@ -930,7 +931,7 @@ static netdev_tx_t pch_xmit(struct sk_buff *skb, struct net_device *ndev)
 	iowrite32(id2, &priv->regs->ifregs[1].id2);
 
 	/* Copy data to register */
-	for (i = 0; i < cf->can_dlc; i += 2) {
+	for (i = 0; i < cf->len; i += 2) {
 		iowrite16(cf->data[i] | (cf->data[i + 1] << 8),
 			  &priv->regs->ifregs[1].data[i / 2]);
 	}
@@ -938,7 +939,7 @@ static netdev_tx_t pch_xmit(struct sk_buff *skb, struct net_device *ndev)
 	can_put_echo_skb(skb, ndev, tx_obj_no - PCH_RX_OBJ_END - 1);
 
 	/* Set the size of the data. Update if2_mcont */
-	iowrite32(cf->can_dlc | PCH_IF_MCONT_NEWDAT | PCH_IF_MCONT_TXRQXT |
+	iowrite32(cf->len | PCH_IF_MCONT_NEWDAT | PCH_IF_MCONT_TXRQXT |
 		  PCH_IF_MCONT_TXIE, &priv->regs->ifregs[1].mcont);
 
 	pch_can_rw_msg_obj(&priv->regs->ifregs[1].creq, tx_obj_no);
