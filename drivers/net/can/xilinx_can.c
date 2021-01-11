@@ -453,7 +453,7 @@ static int xcan_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 	if (cf->can_dlc > 4)
 		data[1] = be32_to_cpup((__be32 *)(cf->data + 4));
 
-	can_put_echo_skb(skb, ndev, priv->tx_head % priv->tx_max);
+	can_put_echo_skb(skb, ndev, priv->tx_head % priv->tx_max, 0);
 
 	spin_lock_irqsave(&priv->tx_lock, flags);
 
