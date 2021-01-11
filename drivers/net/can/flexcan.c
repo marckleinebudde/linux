@@ -761,7 +761,7 @@ static irqreturn_t flexcan_irq(int irq, void *dev_id)
 
 	/* transmission complete interrupt */
 	if (reg_iflag1 & (1 << FLEXCAN_TX_BUF_ID)) {
-		stats->tx_bytes += can_get_echo_skb(dev, 0);
+		stats->tx_bytes += can_get_echo_skb(dev, 0, NULL);
 		stats->tx_packets++;
 		can_led_event(dev, CAN_LED_EVENT_TX);
 
