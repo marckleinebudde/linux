@@ -549,7 +549,7 @@ static int xcan_start_xmit_fifo(struct sk_buff *skb, struct net_device *ndev)
 			XCAN_SR_TXFLL_MASK))
 		return -ENOSPC;
 
-	can_put_echo_skb(skb, ndev, priv->tx_head % priv->tx_max);
+	can_put_echo_skb(skb, ndev, priv->tx_head % priv->tx_max, 0);
 
 	spin_lock_irqsave(&priv->tx_lock, flags);
 
@@ -584,7 +584,7 @@ static int xcan_start_xmit_mailbox(struct sk_buff *skb, struct net_device *ndev)
 		     BIT(XCAN_TX_MAILBOX_IDX)))
 		return -ENOSPC;
 
-	can_put_echo_skb(skb, ndev, 0);
+	can_put_echo_skb(skb, ndev, 0, 0);
 
 	spin_lock_irqsave(&priv->tx_lock, flags);
 
