@@ -537,7 +537,7 @@ static int flexcan_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		flexcan_write(data, &priv->tx_mb->data[1]);
 	}
 
-	can_put_echo_skb(skb, dev, 0);
+	can_put_echo_skb(skb, dev, 0, 0);
 
 	flexcan_write(can_id, &priv->tx_mb->can_id);
 	flexcan_write(ctrl, &priv->tx_mb->can_ctrl);
