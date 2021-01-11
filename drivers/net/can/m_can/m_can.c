@@ -890,7 +890,7 @@ static void m_can_echo_tx_event(struct net_device *dev)
 						(fgi << TXEFA_EFAI_SHIFT)));
 
 		/* update stats */
-		stats->tx_bytes += can_get_echo_skb(dev, msg_mark);
+		stats->tx_bytes += can_get_echo_skb(dev, msg_mark, NULL);
 		stats->tx_packets++;
 	}
 }
@@ -924,7 +924,7 @@ static irqreturn_t m_can_isr(int irq, void *dev_id)
 	if (priv->version == 30) {
 		if (ir & IR_TC) {
 			/* Transmission Complete Interrupt*/
-			stats->tx_bytes += can_get_echo_skb(dev, 0);
+			stats->tx_bytes += can_get_echo_skb(dev, 0, NULL);
 			stats->tx_packets++;
 			can_led_event(dev, CAN_LED_EVENT_TX);
 			netif_wake_queue(dev);
