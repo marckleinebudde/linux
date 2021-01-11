@@ -789,7 +789,7 @@ static irqreturn_t ti_hecc_interrupt(int irq, void *dev_id)
 						HECC_CANMCF) & 0xF;
 			stats->tx_packets++;
 			can_led_event(ndev, CAN_LED_EVENT_TX);
-			can_get_echo_skb(ndev, mbxno);
+			can_get_echo_skb(ndev, mbxno, NULL);
 			--priv->tx_tail;
 		}
 
