@@ -459,7 +459,6 @@ struct kvaser_usb_error_summary {
 struct kvaser_usb_tx_urb_context {
 	struct kvaser_usb_net_priv *priv;
 	u32 echo_index;
-	int dlc;
 };
 
 struct kvaser_usb {
@@ -785,11 +784,10 @@ static void kvaser_usb_tx_acknowledge(const struct kvaser_usb *dev,
 	}
 
 	stats->tx_packets++;
-	stats->tx_bytes += context->dlc;
+	stats->tx_bytes += can_get_echo_skb(priv->netdev, context->echo_index, NULL);
 
 	spin_lock_irqsave(&priv->tx_contexts_lock, flags);
 
-	can_get_echo_skb(priv->netdev, context->echo_index);
 	context->echo_index = dev->max_tx_urbs;
 	--priv->active_tx_contexts;
 	netif_wake_queue(priv->netdev);
@@ -1780,7 +1778,6 @@ static netdev_tx_t kvaser_usb_start_xmit(struct sk_buff *skb,
 	}
 
 	context->priv = priv;
-	context->dlc = cf->can_dlc;
 
 	msg->u.tx_can.tid = context->echo_index;
 
