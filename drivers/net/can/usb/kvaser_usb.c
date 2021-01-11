@@ -1760,7 +1760,7 @@ static netdev_tx_t kvaser_usb_start_xmit(struct sk_buff *skb,
 			context = &priv->tx_contexts[i];
 
 			context->echo_index = i;
-			can_put_echo_skb(skb, netdev, context->echo_index);
+			can_put_echo_skb(skb, netdev, context->echo_index, 0);
 			++priv->active_tx_contexts;
 			if (priv->active_tx_contexts >= dev->max_tx_urbs)
 				netif_stop_queue(netdev);
