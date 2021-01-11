@@ -763,7 +763,7 @@ static irqreturn_t m_can_isr(int irq, void *dev_id)
 
 	/* transmission complete interrupt */
 	if (ir & IR_TC) {
-		stats->tx_bytes += can_get_echo_skb(dev, 0);
+		stats->tx_bytes += can_get_echo_skb(dev, 0, NULL);
 		stats->tx_packets++;
 		can_led_event(dev, CAN_LED_EVENT_TX);
 		netif_wake_queue(dev);
