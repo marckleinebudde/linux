@@ -3296,6 +3296,7 @@ F:	Documentation/devicetree/bindings/net/can/
 F:	drivers/net/can/
 F:	include/linux/can/bittiming.h
 F:	include/linux/can/dev.h
+F:	include/linux/can/length.h
 F:	include/linux/can/platform/
 F:	include/uapi/linux/can/error.h
 F:	include/uapi/linux/can/netlink.h
