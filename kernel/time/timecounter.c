@@ -89,7 +89,7 @@ static u64 cc_cyc2ns_backwards(const struct cyclecounter *cc,
 	return ns;
 }
 
-u64 timecounter_cyc2time(struct timecounter *tc,
+u64 timecounter_cyc2time(const struct timecounter *tc,
 			 cycle_t cycle_tstamp)
 {
 	u64 delta = (cycle_tstamp - tc->cycle_last) & tc->cc->mask;
