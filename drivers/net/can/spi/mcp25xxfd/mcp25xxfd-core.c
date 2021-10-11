@@ -15,6 +15,7 @@
 #include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/device.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/of.h>
@@ -2801,7 +2802,7 @@ static int mcp25xxfd_probe(struct spi_device *spi)
 	priv->reg_vdd = reg_vdd;
 	priv->reg_xceiver = reg_xceiver;
 
-	match = device_get_match_data(&spi->dev);
+	match = of_device_get_match_data(&spi->dev);
 	if (match)
 		priv->devtype_data = *(struct mcp25xxfd_devtype_data *)match;
 	else
