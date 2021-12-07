@@ -241,7 +241,6 @@ struct mcp251x_priv {
 	dma_addr_t spi_rx_dma;
 
 	struct sk_buff *tx_skb;
-	int tx_len;
 
 	struct workqueue_struct *wq;
 	struct work_struct tx_work;
@@ -254,6 +253,8 @@ struct mcp251x_priv {
 #define AFTER_SUSPEND_POWER 4
 #define AFTER_SUSPEND_RESTART 8
 	int restart_tx;
+	bool tx_busy;
+
 	struct regulator *power;
 	struct regulator *transceiver;
 	struct clk *clk;
@@ -272,14 +273,14 @@ static void mcp251x_clean(struct net_device *net)
 {
 	struct mcp251x_priv *priv = netdev_priv(net);
 
-	if (priv->tx_skb || priv->tx_len)
+	if (priv->tx_skb || priv->tx_busy)
 		net->stats.tx_errors++;
 	if (priv->tx_skb)
 		dev_kfree_skb(priv->tx_skb);
-	if (priv->tx_len)
+	if (priv->tx_busy)
 		can_free_echo_skb(priv->net, 0, NULL);
 	priv->tx_skb = NULL;
-	priv->tx_len = 0;
+	priv->tx_busy = false;
 }
 
 /*
@@ -506,7 +507,7 @@ static netdev_tx_t mcp251x_hard_start_xmit(struct sk_buff *skb,
 	struct mcp251x_priv *priv = netdev_priv(net);
 	struct spi_device *spi = priv->spi;
 
-	if (priv->tx_skb || priv->tx_len) {
+	if (priv->tx_skb || priv->tx_busy) {
 		dev_warn(&spi->dev, "hard_xmit called while tx busy\n");
 		return NETDEV_TX_BUSY;
 	}
@@ -742,7 +743,7 @@ static void mcp251x_tx_work_handler(struct work_struct *ws)
 			if (frame->len > CAN_FRAME_MAX_DATA_LEN)
 				frame->len = CAN_FRAME_MAX_DATA_LEN;
 			mcp251x_hw_tx(spi, frame, 0);
-			priv->tx_len = 1 + frame->len;
+			priv->tx_busy = true;
 			can_put_echo_skb(priv->tx_skb, net, 0, 0);
 			priv->tx_skb = NULL;
 		}
@@ -901,12 +902,12 @@ static irqreturn_t mcp251x_can_ist(int irq, void *dev_id)
 			break;
 
 		if (intf & CANINTF_TX) {
-			net->stats.tx_packets++;
-			net->stats.tx_bytes += priv->tx_len - 1;
 			can_led_event(net, CAN_LED_EVENT_TX);
-			if (priv->tx_len) {
-				can_get_echo_skb(net, 0, NULL);
-				priv->tx_len = 0;
+			if (priv->tx_busy) {
+				net->stats.tx_packets++;
+				net->stats.tx_bytes += can_get_echo_skb(net, 0,
+									NULL);
+				priv->tx_busy = false;
 			}
 			netif_wake_queue(net);
 		}
@@ -934,7 +935,7 @@ static int mcp251x_open(struct net_device *net)
 
 	priv->force_quit = 0;
 	priv->tx_skb = NULL;
-	priv->tx_len = 0;
+	priv->tx_busy = false;
 
 	ret = request_threaded_irq(spi->irq, NULL, mcp251x_can_ist,
 				   flags | IRQF_ONESHOT, DEVICE_NAME, priv);
