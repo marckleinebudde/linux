@@ -660,13 +660,8 @@ static void xcan_update_error_state_after_rxtx(struct net_device *ndev)
 
 		xcan_set_error_state(ndev, new_state, skb ? cf : NULL);
 
-		if (skb) {
-			struct net_device_stats *stats = &ndev->stats;
-
-			stats->rx_packets++;
-			stats->rx_bytes += cf->len;
+		if (skb)
 			netif_rx(skb);
-		}
 	}
 }
 
@@ -777,11 +772,8 @@ static void xcan_err_interrupt(struct net_device *ndev, u32 isr)
 			priv->can.can_stats.bus_error++;
 	}
 
-	if (skb) {
-		stats->rx_packets++;
-		stats->rx_bytes += cf->can_dlc;
+	if (skb)
 		netif_rx(skb);
-	}
 
 	netdev_dbg(ndev, "%s: error status register:0x%x\n",
 			__func__, priv->read_reg(priv, XCAN_ESR_OFFSET));
