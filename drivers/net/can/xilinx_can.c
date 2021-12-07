@@ -544,10 +544,11 @@ static int xcan_rx(struct net_device *ndev)
 			*(__be32 *)(cf->data) = cpu_to_be32(data[0]);
 		if (cf->len > 4)
 			*(__be32 *)(cf->data + 4) = cpu_to_be32(data[1]);
-	}
 
-	stats->rx_bytes += cf->len;
+		stats->rx_bytes += cf->len;
+	}
 	stats->rx_packets++;
+
 	netif_receive_skb(skb);
 
 	return 1;

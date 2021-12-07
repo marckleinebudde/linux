@@ -544,17 +544,19 @@ static int pcan_usb_pro_handle_canmsg(struct pcan_usb_pro_interface *usb_if,
 	if (rx->flags & PCAN_USBPRO_EXT)
 		can_frame->can_id |= CAN_EFF_FLAG;
 
-	if (rx->flags & PCAN_USBPRO_RTR)
+	if (rx->flags & PCAN_USBPRO_RTR) {
 		can_frame->can_id |= CAN_RTR_FLAG;
-	else
+	} else {
 		memcpy(can_frame->data, rx->data, can_frame->len);
+
+		netdev->stats.rx_bytes += can_frame->len;
+	}
+	netdev->stats.rx_packets++;
 
 	peak_usb_get_ts_tv(&usb_if->time_ref, le32_to_cpu(rx->ts32), &tv);
 	hwts = skb_hwtstamps(skb);
 	hwts->hwtstamp = timeval_to_ktime(tv);
 
-	netdev->stats.rx_packets++;
-	netdev->stats.rx_bytes += can_frame->len;
 	netif_rx(skb);
 
 	return 0;
