@@ -263,7 +263,6 @@ struct ucan_priv;
 /* Context Information for transmission URBs */
 struct ucan_urb_context {
 	struct ucan_priv *up;
-	u8 dlc;
 	bool allocated;
 };
 
@@ -641,7 +640,7 @@ static void ucan_tx_complete_msg(struct ucan_priv *up,
 {
 	unsigned long flags;
 	u16 count, i;
-	u8 echo_index, dlc;
+	u8 echo_index;
 	u16 len = le16_to_cpu(m->len);
 
 	struct ucan_urb_context *context;
@@ -665,7 +664,6 @@ static void ucan_tx_complete_msg(struct ucan_priv *up,
 
 		/* gather information from the context */
 		context = &up->context_array[echo_index];
-		dlc = READ_ONCE(context->dlc);
 
 		/* Release context and restart queue if necessary.
 		 * Also check if the context was allocated
@@ -678,8 +676,8 @@ static void ucan_tx_complete_msg(struct ucan_priv *up,
 		    UCAN_TX_COMPLETE_SUCCESS) {
 			/* update statistics */
 			up->netdev->stats.tx_packets++;
-			up->netdev->stats.tx_bytes += dlc;
-			can_get_echo_skb(up->netdev, echo_index, NULL);
+			up->netdev->stats.tx_bytes +=
+				can_get_echo_skb(up->netdev, echo_index, NULL);
 		} else {
 			up->netdev->stats.tx_dropped++;
 			can_free_echo_skb(up->netdev, echo_index, NULL);
@@ -1092,8 +1090,6 @@ static struct urb *ucan_prepare_tx_urb(struct ucan_priv *up,
 		memcpy(m->msg.can_msg.data, cf->data, cf->len);
 	}
 	m->len = cpu_to_le16(mlen);
-
-	context->dlc = cf->len;
 
 	m->subtype = echo_index;
 
