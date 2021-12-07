@@ -496,13 +496,13 @@ static void m_can_read_fifo(struct net_device *dev, u32 rxfs)
 			*(u32 *)(cf->data + i) =
 				m_can_fifo_read(priv, fgi,
 						M_CAN_FIFO_DATA(i / 4));
+
+		stats->rx_bytes += cf->len;
 	}
+	stats->rx_packets++;
 
 	/* acknowledge rx fifo 0 */
 	m_can_write(priv, M_CAN_RXF0A, fgi);
-
-	stats->rx_packets++;
-	stats->rx_bytes += cf->len;
 
 	netif_receive_skb(skb);
 }
