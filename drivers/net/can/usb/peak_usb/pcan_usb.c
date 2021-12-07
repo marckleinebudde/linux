@@ -663,16 +663,17 @@ static int pcan_usb_decode_data(struct pcan_usb_msg_context *mc, u8 status_len)
 
 		memcpy(cf->data, mc->ptr, cf->len);
 		mc->ptr += rec_len;
+
+		/* update statistics */
+		mc->netdev->stats.rx_bytes += cf->len;
 	}
+	mc->netdev->stats.rx_packets++;
 
 	/* convert timestamp into kernel time */
 	peak_usb_get_ts_tv(&mc->pdev->time_ref, mc->ts16, &tv);
 	hwts = skb_hwtstamps(skb);
 	hwts->hwtstamp = timeval_to_ktime(tv);
 
-	/* update statistics */
-	mc->netdev->stats.rx_packets++;
-	mc->netdev->stats.rx_bytes += cf->len;
 	/* push the skb */
 	netif_rx(skb);
 
