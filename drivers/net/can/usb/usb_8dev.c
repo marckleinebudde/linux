@@ -125,7 +125,6 @@ struct usb_8dev_tx_urb_context {
 	struct usb_8dev_priv *priv;
 
 	u32 echo_index;
-	u8 dlc;
 };
 
 /* Structure to hold all of our device specific stuff */
@@ -594,9 +593,7 @@ static void usb_8dev_write_bulk_callback(struct urb *urb)
 			 urb->status);
 
 	netdev->stats.tx_packets++;
-	netdev->stats.tx_bytes += context->dlc;
-
-	can_get_echo_skb(netdev, context->echo_index, NULL);
+	netdev->stats.tx_bytes += can_get_echo_skb(netdev, context->echo_index, NULL);
 
 	can_led_event(netdev, CAN_LED_EVENT_TX);
 
@@ -667,7 +664,6 @@ static netdev_tx_t usb_8dev_start_xmit(struct sk_buff *skb,
 
 	context->priv = priv;
 	context->echo_index = i;
-	context->dlc = cf->len;
 
 	usb_fill_bulk_urb(urb, priv->udev,
 			  usb_sndbulkpipe(priv->udev, USB_8DEV_ENDP_DATA_TX),
