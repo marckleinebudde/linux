@@ -311,12 +311,15 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 	switch (urb->status) {
 	case 0: /* success */
 		break;
-	case -ENOENT:
-	case -ESHUTDOWN:
-		return;
+	case -ENOENT:		// 2
+	case -ENODEV:		// 19	-- 
+	case -EPIPE:		// 32	-- unplug in xmit
+	case -EPROTO:		// 71	-- unplug candelight//cantact
+	case -ECONNRESET:	// 104
+	case -ESHUTDOWN:	// 108	-- after disconnect // unbind // rmmod
+		goto out_usb_free_coherent;
 	default:
-		/* do not resubmit aborted urbs. eg: when device goes down */
-		return;
+		break;
 	}
 
 	/* device reports out of range channel id */
@@ -334,7 +337,7 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 	if (hf->echo_id == -1) { /* normal rx */
 		skb = alloc_can_skb(dev->netdev, &cf);
 		if (!skb)
-			return;
+			goto resubmit_urb;
 
 		cf->can_id = le32_to_cpu(hf->can_id);
 
@@ -402,7 +405,12 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 			  );
 
 	rc = usb_submit_urb(urb, GFP_ATOMIC);
+	if (rc)
+		goto out_netif_device_detach;
 
+	return;
+
+ out_netif_device_detach:
 	/* USB failure take down all interfaces */
 	if (rc == -ENODEV) {
  device_detach:
@@ -411,6 +419,9 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 				netif_device_detach(usbcan->canch[rc]->netdev);
 		}
 	}
+ out_usb_free_coherent:
+	usb_free_coherent(urb->dev, urb->transfer_buffer_length,
+			  urb->transfer_buffer, urb->transfer_dma);
 }
 
 static int gs_usb_set_bittiming(struct net_device *netdev)
