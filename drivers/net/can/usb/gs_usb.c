@@ -806,16 +806,15 @@ static struct gs_can *gs_make_candev(unsigned int channel,
 		dev_err(&intf->dev,
 			"Couldn't get bit timing const for channel (err=%d)\n",
 			rc);
-		kfree(bt_const);
-		return ERR_PTR(rc);
+		goto out_kfree_bt_const;
 	}
 
 	/* create netdev */
 	netdev = alloc_candev(sizeof(struct gs_can), GS_MAX_TX_URBS);
 	if (!netdev) {
 		dev_err(&intf->dev, "Couldn't allocate candev\n");
-		kfree(bt_const);
-		return ERR_PTR(-ENOMEM);
+		rc = -ENOMEM;
+		goto out_kfree_bt_const;
 	}
 
 	dev = netdev_priv(netdev);
@@ -885,6 +884,10 @@ static struct gs_can *gs_make_candev(unsigned int channel,
 	}
 
 	return dev;
+
+ out_kfree_bt_const:
+	kfree(bt_const);
+	return ERR_PTR(rc);
 }
 
 static void gs_destroy_candev(struct gs_can *dev)
