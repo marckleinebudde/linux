@@ -1276,7 +1276,9 @@ static struct net_device *alloc_m_can_dev(struct platform_device *pdev,
 		break;
 	case 31:
 		/* CAN_CTRLMODE_FD_NON_ISO is fixed with M_CAN IP v3.1.x */
-		can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		err = can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		if (err)
+			return err;
 		priv->can.bittiming_const = &m_can_bittiming_const_31X;
 		priv->can.data_bittiming_const =
 				&m_can_data_bittiming_const_31X;
