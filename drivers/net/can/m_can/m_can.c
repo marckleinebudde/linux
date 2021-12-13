@@ -1257,7 +1257,7 @@ static int m_can_dev_setup(struct platform_device *pdev, struct net_device *dev,
 			   void __iomem *addr)
 {
 	struct m_can_priv *priv;
-	int m_can_version;
+	int m_can_version, err;
 
 	m_can_version = m_can_check_core_release(addr);
 	/* return if unsupported version */
@@ -1287,14 +1287,18 @@ static int m_can_dev_setup(struct platform_device *pdev, struct net_device *dev,
 	switch (priv->version) {
 	case 30:
 		/* CAN_CTRLMODE_FD_NON_ISO is fixed with M_CAN IP v3.0.x */
-		can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		err = can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		if (err)
+			return err;
 		priv->can.bittiming_const = &m_can_bittiming_const_30X;
 		priv->can.data_bittiming_const =
 				&m_can_data_bittiming_const_30X;
 		break;
 	case 31:
 		/* CAN_CTRLMODE_FD_NON_ISO is fixed with M_CAN IP v3.1.x */
-		can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		err = can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		if (err)
+			return err;
 		priv->can.bittiming_const = &m_can_bittiming_const_31X;
 		priv->can.data_bittiming_const =
 				&m_can_data_bittiming_const_31X;
