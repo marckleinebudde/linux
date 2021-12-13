@@ -1225,7 +1225,7 @@ static struct net_device *alloc_m_can_dev(struct platform_device *pdev,
 {
 	struct net_device *dev;
 	struct m_can_priv *priv;
-	int m_can_version;
+	int m_can_version, err;
 	unsigned int echo_buffer_count;
 
 	m_can_version = m_can_check_core_release(addr);
@@ -1265,14 +1265,18 @@ static struct net_device *alloc_m_can_dev(struct platform_device *pdev,
 	switch (priv->version) {
 	case 30:
 		/* CAN_CTRLMODE_FD_NON_ISO is fixed with M_CAN IP v3.0.x */
-		can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		err = can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		if (err)
+			return NULL;
 		priv->can.bittiming_const = &m_can_bittiming_const_30X;
 		priv->can.data_bittiming_const =
 				&m_can_data_bittiming_const_30X;
 		break;
 	case 31:
 		/* CAN_CTRLMODE_FD_NON_ISO is fixed with M_CAN IP v3.1.x */
-		can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		err = can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+		if (err)
+			return NULL;
 		priv->can.bittiming_const = &m_can_bittiming_const_31X;
 		priv->can.data_bittiming_const =
 				&m_can_data_bittiming_const_31X;
