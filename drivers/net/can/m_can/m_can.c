@@ -932,6 +932,7 @@ static struct net_device *alloc_m_can_dev(void)
 {
 	struct net_device *dev;
 	struct m_can_priv *priv;
+	int err;
 
 	dev = alloc_candev(sizeof(*priv), 1);
 	if (!dev)
@@ -947,7 +948,9 @@ static struct net_device *alloc_m_can_dev(void)
 	priv->can.do_get_berr_counter = m_can_get_berr_counter;
 
 	/* CAN_CTRLMODE_FD_NON_ISO is fixed with M_CAN IP v3.0.1 */
-	can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+	err = can_set_static_ctrlmode(dev, CAN_CTRLMODE_FD_NON_ISO);
+	if (err)
+		return NULL;
 
 	/* CAN_CTRLMODE_FD_NON_ISO can not be changed with M_CAN IP v3.0.1 */
 	priv->can.ctrlmode_supported = CAN_CTRLMODE_LOOPBACK |
