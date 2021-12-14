@@ -645,6 +645,9 @@ static int gs_can_open(struct net_device *netdev)
 					   rc);
 
 				usb_unanchor_urb(urb);
+				usb_free_coherent(urb->dev,
+						  urb->transfer_buffer_length,
+						  urb->transfer_buffer, urb->transfer_dma);
 				usb_free_urb(urb);
 				break;
 			}
