@@ -975,8 +975,7 @@ static int gs_usb_probe(struct usb_interface *intf,
 	if (rc < 0) {
 		dev_err(&intf->dev, "Couldn't get device config: (err=%d)\n",
 			rc);
-		kfree(dconf);
-		return rc;
+		goto out_kfree_dconf;
 	}
 
 	icount = dconf->icount + 1;
@@ -986,14 +985,14 @@ static int gs_usb_probe(struct usb_interface *intf,
 		dev_err(&intf->dev,
 			"Driver cannot handle more that %u CAN interfaces\n",
 			GS_MAX_INTF);
-		kfree(dconf);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto out_kfree_dconf;
 	}
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev) {
-		kfree(dconf);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto out_kfree_dconf;
 	}
 
 	init_usb_anchor(&dev->rx_submitted);
@@ -1015,16 +1014,17 @@ static int gs_usb_probe(struct usb_interface *intf,
 				gs_destroy_candev(dev->canch[i]);
 
 			usb_kill_anchored_urbs(&dev->rx_submitted);
-			kfree(dconf);
 			kfree(dev);
-			return rc;
+			goto out_kfree_dconf;
 		}
 		dev->canch[i]->parent = dev;
 	}
 
-	kfree(dconf);
+	rc = 0;
 
-	return 0;
+ out_kfree_dconf: /* fallthrough */
+	kfree(dconf);
+	return rc;
 }
 
 static void gs_usb_disconnect(struct usb_interface *intf)
