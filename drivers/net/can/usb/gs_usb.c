@@ -42,6 +42,7 @@ enum gs_usb_breq {
 	GS_USB_BREQ_TIMESTAMP,
 	GS_USB_BREQ_IDENTIFY,
 	GS_USB_BREQ_GET_USER_ID,
+	GS_USB_BREQ_QUIRK_OVERLAP_DATA_BITTIMING = GS_USB_BREQ_GET_USER_ID,
 	GS_USB_BREQ_SET_USER_ID,
 	GS_USB_BREQ_DATA_BITTIMING,
 };
@@ -137,6 +138,11 @@ struct gs_identify_mode {
 #define GS_CAN_FEATURE_FD BIT(8)
 #define GS_CAN_FEATURE_REQ_USB_QUIRK_LPC546XX BIT(9)
 #define GS_CAN_FEATURE_MASK GENMASK(9, 0)
+
+/* internal quirks - keep in GS_CAN_FEATURE space for now */
+
+/* BREQ DATA_BITTIMING overlaps with GET_USER_ID */
+#define GS_CAN_FEATURE_QUIRK_BREQ_OVERLAP BIT(31)
 
 struct gs_device_bt_const {
 	__le32 feature;
@@ -517,6 +523,7 @@ static int gs_usb_set_data_bittiming(struct net_device *netdev)
 	struct can_bittiming *bt = &dev->can.data_bittiming;
 	struct usb_interface *intf = dev->iface;
 	struct gs_device_bittiming *dbt;
+	u8 request = GS_USB_BREQ_DATA_BITTIMING;
 	int rc;
 
 	dbt = kmalloc(sizeof(*dbt), GFP_KERNEL);
@@ -529,10 +536,13 @@ static int gs_usb_set_data_bittiming(struct net_device *netdev)
 	dbt->sjw = cpu_to_le32(bt->sjw);
 	dbt->brp = cpu_to_le32(bt->brp);
 
+	if (dev->feature & GS_CAN_FEATURE_QUIRK_BREQ_OVERLAP)
+		request = GS_USB_BREQ_QUIRK_OVERLAP_DATA_BITTIMING;
+
 	/* request bit timings */
 	rc = usb_control_msg(interface_to_usbdev(intf),
 			     usb_sndctrlpipe(interface_to_usbdev(intf), 0),
-			     GS_USB_BREQ_DATA_BITTIMING,
+			     request,
 			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
 			     dev->channel, 0, dbt, sizeof(*dbt), 1000);
 
