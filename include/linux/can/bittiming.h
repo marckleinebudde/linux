@@ -11,11 +11,11 @@
 #define CAN_SYNC_SEG 1
 
 #ifdef CONFIG_CAN_CALC_BITTIMING
-int can_calc_bittiming(struct net_device *dev, struct can_bittiming *bt,
+int can_calc_bittiming(const struct net_device *dev, struct can_bittiming *bt,
 		       const struct can_bittiming_const *btc);
 #else /* !CONFIG_CAN_CALC_BITTIMING */
 static inline int
-can_calc_bittiming(struct net_device *dev, struct can_bittiming *bt,
+can_calc_bittiming(const struct net_device *dev, struct can_bittiming *bt,
 		   const struct can_bittiming_const *btc)
 {
 	netdev_err(dev, "bit-timing calculation not available\n");
@@ -23,7 +23,7 @@ can_calc_bittiming(struct net_device *dev, struct can_bittiming *bt,
 }
 #endif /* CONFIG_CAN_CALC_BITTIMING */
 
-int can_get_bittiming(struct net_device *dev, struct can_bittiming *bt,
+int can_get_bittiming(const struct net_device *dev, struct can_bittiming *bt,
 		      const struct can_bittiming_const *btc,
 		      const u32 *bitrate_const,
 		      const unsigned int bitrate_const_cnt);
