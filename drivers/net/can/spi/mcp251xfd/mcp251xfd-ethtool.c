@@ -12,9 +12,7 @@
 
 static void
 mcp251xfd_ring_get_ringparam(struct net_device *ndev,
-			     struct ethtool_ringparam *ring,
-			     struct kernel_ethtool_ringparam *kernel_ring,
-			     struct netlink_ext_ack *extack)
+			     struct ethtool_ringparam *ring)
 {
 	const struct mcp251xfd_priv *priv = netdev_priv(ndev);
 
