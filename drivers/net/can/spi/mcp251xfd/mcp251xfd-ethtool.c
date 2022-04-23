@@ -29,9 +29,7 @@ mcp251xfd_ring_get_ringparam(struct net_device *ndev,
 
 static int
 mcp251xfd_ring_set_ringparam(struct net_device *ndev,
-			     struct ethtool_ringparam *ring,
-			     struct kernel_ethtool_ringparam *kernel_ring,
-			     struct netlink_ext_ack *extack)
+			     struct ethtool_ringparam *ring)
 {
 	struct mcp251xfd_priv *priv = netdev_priv(ndev);
 	const bool fd_mode = mcp251xfd_is_fd_mode(priv);
