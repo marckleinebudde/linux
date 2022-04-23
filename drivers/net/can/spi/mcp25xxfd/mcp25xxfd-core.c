@@ -2453,9 +2453,9 @@ static void
 mcp25xxfd_register_quirks(struct mcp25xxfd_priv *priv)
 {
 	const struct spi_device *spi = priv->spi;
-	const struct spi_controller *ctlr = spi->controller;
+	const struct spi_master *ctlr = spi->master;
 
-	if (ctlr->flags & SPI_CONTROLLER_HALF_DUPLEX)
+	if (ctlr->flags & SPI_MASTER_HALF_DUPLEX)
 		priv->devtype_data.quirks |= MCP25XXFD_QUIRK_HALF_DUPLEX;
 }
 
