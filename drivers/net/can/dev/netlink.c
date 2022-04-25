@@ -73,7 +73,7 @@ static int can_validate(struct nlattr *tb[], struct nlattr *data[])
 
 			err = nla_parse_nested(tb_tdc, IFLA_CAN_TDC_MAX,
 					       data[IFLA_CAN_TDC],
-					       can_tdc_policy, extack);
+					       can_tdc_policy);
 			if (err)
 				return err;
 
@@ -103,8 +103,7 @@ static int can_validate(struct nlattr *tb[], struct nlattr *data[])
 	return 0;
 }
 
-static int can_tdc_changelink(struct can_priv *priv, const struct nlattr *nla,
-			      struct netlink_ext_ack *extack)
+static int can_tdc_changelink(struct can_priv *priv, const struct nlattr *nla)
 {
 	struct nlattr *tb_tdc[IFLA_CAN_TDC_MAX + 1];
 	struct can_tdc tdc = { 0 };
@@ -115,7 +114,7 @@ static int can_tdc_changelink(struct can_priv *priv, const struct nlattr *nla,
 		return -EOPNOTSUPP;
 
 	err = nla_parse_nested(tb_tdc, IFLA_CAN_TDC_MAX, nla,
-			       can_tdc_policy, extack);
+			       can_tdc_policy);
 	if (err)
 		return err;
 
@@ -296,8 +295,7 @@ static int can_changelink(struct net_device *dev, struct nlattr *tb[],
 		memset(&priv->tdc, 0, sizeof(priv->tdc));
 		if (data[IFLA_CAN_TDC]) {
 			/* TDC parameters are provided: use them */
-			err = can_tdc_changelink(priv, data[IFLA_CAN_TDC],
-						 extack);
+			err = can_tdc_changelink(priv, data[IFLA_CAN_TDC]);
 			if (err) {
 				priv->ctrlmode &= ~CAN_CTRLMODE_TDC_MASK;
 				return err;
