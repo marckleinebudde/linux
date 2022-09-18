@@ -37,6 +37,12 @@
 #define GSUSB_ENDPOINT_IN 1
 #define GSUSB_ENDPOINT_OUT 2
 
+#define GS_TERMINATION_DISABLED CAN_TERMINATION_DISABLED
+#define GS_TERMINATION_ENABLED 120
+
+static const u16 gs_termination[] = {
+	GS_TERMINATION_DISABLED, GS_TERMINATION_ENABLED };
+
 /* Device specific constants */
 enum gs_usb_breq {
 	GS_USB_BREQ_HOST_FORMAT = 0,
@@ -52,6 +58,7 @@ enum gs_usb_breq {
 	GS_USB_BREQ_SET_USER_ID,
 	GS_USB_BREQ_DATA_BITTIMING,
 	GS_USB_BREQ_BT_CONST_EXT,
+	GS_USB_BREQ_TERMINATOR,
 };
 
 enum gs_can_mode {
@@ -73,6 +80,11 @@ enum gs_can_state {
 enum gs_can_identify_mode {
 	GS_CAN_IDENTIFY_OFF = 0,
 	GS_CAN_IDENTIFY_ON
+};
+
+enum gs_can_termination_mode {
+	GS_CAN_TERMINATION_OFF = 0,
+	GS_CAN_TERMINATION_ON
 };
 
 /* data types passed between host and device */
@@ -135,6 +147,10 @@ struct gs_identify_mode {
 	__le32 mode;
 } __packed;
 
+struct gs_termination_state {
+	__le32 state;
+} __packed;
+
 #define GS_CAN_FEATURE_LISTEN_ONLY BIT(0)
 #define GS_CAN_FEATURE_LOOP_BACK BIT(1)
 #define GS_CAN_FEATURE_TRIPLE_SAMPLE BIT(2)
@@ -194,6 +210,7 @@ struct gs_device_bt_const_extended {
 #define GS_CAN_FLAG_FD BIT(1)
 #define GS_CAN_FLAG_BRS BIT(2)
 #define GS_CAN_FLAG_ESI BIT(3)
+#define GS_CAN_FLAG_TERM BIT(4)
 
 struct classic_can {
 	u8 data[8];
@@ -376,18 +393,104 @@ static void gs_update_state(struct gs_can *dev, struct can_frame *cf)
 	}
 }
 
-static void gs_usb_receive_bulk_callback(struct urb *urb)
+static int gs_usb_receive_can_normal_rx(struct gs_can *dev,
+										struct gs_host_frame *hf)
 {
-	struct gs_usb *usbcan = urb->context;
-	struct gs_can *dev;
-	struct net_device *netdev;
-	int rc;
-	struct net_device_stats *stats;
-	struct gs_host_frame *hf = urb->transfer_buffer;
-	struct gs_tx_context *txc;
+	struct sk_buff *skb;
 	struct can_frame *cf;
 	struct canfd_frame *cfd;
-	struct sk_buff *skb;
+	struct net_device *netdev = dev->netdev;
+
+	if (hf->flags & GS_CAN_FLAG_FD) {
+		skb = alloc_canfd_skb(dev->netdev, &cfd);
+		if (!skb)
+			return -1;
+
+		cfd->can_id = le32_to_cpu(hf->can_id);
+		cfd->len = can_fd_dlc2len(hf->can_dlc);
+		if (hf->flags & GS_CAN_FLAG_BRS)
+			cfd->flags |= CANFD_BRS;
+		if (hf->flags & GS_CAN_FLAG_ESI)
+			cfd->flags |= CANFD_ESI;
+
+		memcpy(cfd->data, hf->canfd->data, cfd->len);
+	} else {
+		skb = alloc_can_skb(dev->netdev, &cf);
+		if (!skb)
+			return -1;
+
+		cf->can_id = le32_to_cpu(hf->can_id);
+		can_frame_set_cc_len(cf, hf->can_dlc, dev->can.ctrlmode);
+
+		memcpy(cf->data, hf->classic_can->data, 8);
+
+		/* ERROR frames tell us information about the controller */
+		if (le32_to_cpu(hf->can_id) & CAN_ERR_FLAG)
+			gs_update_state(dev, cf);
+	}
+
+	netdev->stats.rx_packets++;
+	netdev->stats.rx_bytes += hf->can_dlc;
+
+	netif_rx(skb);
+	return 0;
+}
+
+static void gs_usb_receive_can_terminating_resistor(struct gs_can *dev,
+													struct gs_host_frame *hf)
+{
+	dev->can.termination = (hf->flags & GS_CAN_FLAG_TERM) ?
+							GS_TERMINATION_ENABLED : GS_TERMINATION_DISABLED;
+	netdev_err(dev->netdev, "Term State: %d\n", dev->can.termination);
+}
+
+static int gs_usb_receive_can_echo_tx(struct gs_can *dev,
+									  struct gs_host_frame *hf)
+{
+	struct net_device *netdev = dev->netdev;
+	struct gs_tx_context *txc = gs_get_tx_context(dev, hf->echo_id);
+
+	/* bad devices send bad echo_ids. */
+	if (!txc) {
+		netdev_err(netdev, "Unexpected unused echo id %u\n", hf->echo_id);
+		return -1;
+	}
+
+	netdev->stats.tx_packets++;
+	netdev->stats.tx_bytes += can_get_echo_skb(netdev, hf->echo_id, NULL);
+
+	gs_free_tx_context(txc);
+
+	atomic_dec(&dev->active_tx_urbs);
+
+	netif_wake_queue(netdev);
+	return 0;
+}
+
+static void gs_usb_receive_can_overflow(struct gs_can *dev)
+{
+	struct can_frame *cf;
+	struct net_device *netdev = dev->netdev;
+	struct sk_buff *skb = alloc_can_err_skb(netdev, &cf);
+	if (!skb)
+		return;
+
+	cf->can_id |= CAN_ERR_CRTL;
+	cf->len = CAN_ERR_DLC;
+	cf->data[1] = CAN_ERR_CRTL_RX_OVERFLOW;
+
+	netdev->stats.rx_over_errors++;
+	netdev->stats.rx_errors++;
+
+	netif_rx(skb);
+}
+
+static void gs_usb_receive_bulk_callback(struct urb *urb)
+{
+	int rc;
+	struct gs_can *dev;
+	struct gs_usb *usbcan = urb->context;
+	struct gs_host_frame *hf = urb->transfer_buffer;
 
 	BUG_ON(!usbcan);
 
@@ -408,85 +511,30 @@ static void gs_usb_receive_bulk_callback(struct urb *urb)
 
 	dev = usbcan->canch[hf->channel];
 
-	netdev = dev->netdev;
-	stats = &netdev->stats;
-
-	if (!netif_device_present(netdev))
+	if (!netif_device_present(dev->netdev))
 		return;
 
-	if (hf->echo_id == -1) { /* normal rx */
-		if (hf->flags & GS_CAN_FLAG_FD) {
-			skb = alloc_canfd_skb(dev->netdev, &cfd);
-			if (!skb)
-				return;
+	if (hf->echo_id == 0xFFFFFFFF) { /* normal rx */
+		if (gs_usb_receive_can_normal_rx(dev, hf))
+			return;
 
-			cfd->can_id = le32_to_cpu(hf->can_id);
-			cfd->len = can_fd_dlc2len(hf->can_dlc);
-			if (hf->flags & GS_CAN_FLAG_BRS)
-				cfd->flags |= CANFD_BRS;
-			if (hf->flags & GS_CAN_FLAG_ESI)
-				cfd->flags |= CANFD_ESI;
+	} else if (hf->echo_id == 0xFFFFFFFE) { /* Terminating resistor state */
+		gs_usb_receive_can_terminating_resistor(dev, hf);
 
-			memcpy(cfd->data, hf->canfd->data, cfd->len);
-		} else {
-			skb = alloc_can_skb(dev->netdev, &cf);
-			if (!skb)
-				return;
-
-			cf->can_id = le32_to_cpu(hf->can_id);
-			can_frame_set_cc_len(cf, hf->can_dlc, dev->can.ctrlmode);
-
-			memcpy(cf->data, hf->classic_can->data, 8);
-
-			/* ERROR frames tell us information about the controller */
-			if (le32_to_cpu(hf->can_id) & CAN_ERR_FLAG)
-				gs_update_state(dev, cf);
-		}
-
-		netdev->stats.rx_packets++;
-		netdev->stats.rx_bytes += hf->can_dlc;
-
-		netif_rx(skb);
-	} else { /* echo_id == hf->echo_id */
-		if (hf->echo_id >= GS_MAX_TX_URBS) {
-			netdev_err(netdev,
+	} else if (hf->echo_id >= GS_MAX_TX_URBS) {
+		netdev_err(dev->netdev,
 				   "Unexpected out of range echo id %u\n",
 				   hf->echo_id);
+
+		goto resubmit_urb;
+
+	} else { /* echo_id == hf->echo_id */
+		if (gs_usb_receive_can_echo_tx(dev, hf))
 			goto resubmit_urb;
-		}
-
-		txc = gs_get_tx_context(dev, hf->echo_id);
-
-		/* bad devices send bad echo_ids. */
-		if (!txc) {
-			netdev_err(netdev,
-				   "Unexpected unused echo id %u\n",
-				   hf->echo_id);
-			goto resubmit_urb;
-		}
-
-		netdev->stats.tx_packets++;
-		netdev->stats.tx_bytes += can_get_echo_skb(netdev, hf->echo_id,
-							   NULL);
-
-		gs_free_tx_context(txc);
-
-		atomic_dec(&dev->active_tx_urbs);
-
-		netif_wake_queue(netdev);
 	}
 
 	if (hf->flags & GS_CAN_FLAG_OVERFLOW) {
-		skb = alloc_can_err_skb(netdev, &cf);
-		if (!skb)
-			goto resubmit_urb;
-
-		cf->can_id |= CAN_ERR_CRTL;
-		cf->len = CAN_ERR_DLC;
-		cf->data[1] = CAN_ERR_CRTL_RX_OVERFLOW;
-		stats->rx_over_errors++;
-		stats->rx_errors++;
-		netif_rx(skb);
+		gs_usb_receive_can_overflow(dev);
 	}
 
  resubmit_urb:
@@ -924,7 +972,35 @@ static int gs_usb_set_identify(struct net_device *netdev, bool do_identify)
 	return (rc > 0) ? 0 : rc;
 }
 
-/* blink LED's for finding the this interface */
+
+static int gs_set_termination(struct net_device *netdev, u16 term)
+{
+	struct gs_can *dev = netdev_priv(netdev);
+	struct gs_termination_state *tmode;
+	int rc;
+
+	tmode = kmalloc(sizeof(*tmode), GFP_KERNEL);
+
+	if (!tmode)
+		return -ENOMEM;
+
+	if (term == GS_TERMINATION_ENABLED)
+		tmode->state = cpu_to_le32(GS_CAN_TERMINATION_ON);
+	else
+		tmode->state = cpu_to_le32(GS_CAN_TERMINATION_OFF);
+
+	rc = usb_control_msg(interface_to_usbdev(dev->iface),
+			     usb_sndctrlpipe(interface_to_usbdev(dev->iface), 0),
+			     GS_USB_BREQ_TERMINATOR,
+			     USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_INTERFACE,
+			     dev->channel, 0, tmode, sizeof(*tmode), 100);
+
+	kfree(tmode);
+
+	return (rc > 0) ? 0 : rc;
+}
+
+/* blink LED's for finding this interface */
 static int gs_usb_set_phys_id(struct net_device *dev,
 			      enum ethtool_phys_id_state state)
 {
@@ -1116,6 +1192,10 @@ static struct gs_can *gs_make_candev(unsigned int channel,
 
 		kfree(bt_const_extended);
 	}
+
+	dev->can.termination_const = gs_termination;
+	dev->can.termination_const_cnt = ARRAY_SIZE(gs_termination);
+	dev->can.do_set_termination = gs_set_termination;
 
 	SET_NETDEV_DEV(netdev, &intf->dev);
 
